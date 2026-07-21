@@ -306,7 +306,7 @@ export default function Home() {
           <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center gap-2">
             <Database className="w-6 h-6 text-blue-400" /> AWS Architect Pro
           </h1>
-          {currentUser && view !== "login" && view !== "admin" && (
+          {currentUser && view !== "login" && (
             <div className="flex gap-4 items-center">
               <div className="text-sm text-slate-400 flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full">
                 <User className="w-4 h-4" /> <span className="capitalize">{currentUser.name}</span>
