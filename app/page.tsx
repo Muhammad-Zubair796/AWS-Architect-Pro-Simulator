@@ -3,13 +3,13 @@ import { useState, useEffect } from "react";
 import { phases, Command } from "../data/phases";
 import CodeTester from "../components/CodeTester";
 import ArchitectureVisualizer from "../components/ArchitectureVisualizer";
-import { Terminal, Code, ArrowRight, ArrowLeft, Database, LayoutDashboard, PlayCircle, CheckCircle2, ChefHat, User, Clock, BookOpen, ChevronDown, ChevronUp, Lock, MapPin, Briefcase, MessageCircle, Shield } from "lucide-react";
+import { Terminal, Code, ArrowRight, ArrowLeft, Database, LayoutDashboard, PlayCircle, CheckCircle2, ChefHat, User, Clock, BookOpen, ChevronDown, ChevronUp, Lock, MapPin, Briefcase, MessageCircle, Shield, Ban } from "lucide-react";
 
 type ExamRun = { date: string; score: number; maxScore: number; mode: string; timeTaken: number };
-type UserProfile = { name: string; password?: string; country?: string; designation?: string; history: ExamRun[] };
+type UserProfile = { name: string; password?: string; country?: string; designation?: string; isBlocked?: boolean; history: ExamRun[] };
 
 // --- YOUR CONTACT INFO ---
-const WHATSAPP_NUMBER = "923401071629"; // <-- CHANGE THIS TO YOUR ACTUAL WHATSAPP NUMBER (Include country code, no + or spaces)
+const WHATSAPP_NUMBER = "923401071629"; // Your correct WhatsApp number
 
 export default function Home() {
   const [view, setView] = useState<"login" | "intro" | "simulator" | "dashboard" | "admin">("login");
@@ -97,6 +97,13 @@ export default function Home() {
 
     if (allUsers[name]) {
       // Returning User
+      
+      // CHECK IF USER IS BLOCKED
+      if (allUsers[name].isBlocked) {
+        setLoginError("Your account has been blocked by the administrator.");
+        return;
+      }
+
       if (allUsers[name].password !== pwd) {
         setLoginError("Incorrect password for this username.");
         return;
@@ -113,6 +120,7 @@ export default function Home() {
         password: pwd, 
         country: name === "admin" ? "Admin" : countryInput.trim(), 
         designation: name === "admin" ? "Admin" : designationInput.trim(), 
+        isBlocked: false,
         history: [] 
       };
       const updatedUsers = { ...allUsers, [name]: newUser };
@@ -123,6 +131,17 @@ export default function Home() {
     
     // Everyone goes to the intro screen (even the admin, so they can play!)
     setView("intro");
+  };
+
+  // ADMIN FUNCTION: Block or Unblock a user
+  const toggleBlockUser = (targetUsername: string) => {
+    if (targetUsername === "admin") return; // Cannot block the admin
+    
+    const updatedUsers = { ...allUsers };
+    updatedUsers[targetUsername].isBlocked = !updatedUsers[targetUsername].isBlocked;
+    
+    setAllUsers(updatedUsers);
+    saveUsersToDB(updatedUsers);
   };
 
   const startExam = () => {
@@ -287,7 +306,7 @@ export default function Home() {
           <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center gap-2">
             <Database className="w-6 h-6 text-blue-400" /> AWS Architect Pro
           </h1>
-          {currentUser && view !== "login" && (
+          {currentUser && view !== "login" && view !== "admin" && (
             <div className="flex gap-4 items-center">
               <div className="text-sm text-slate-400 flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full">
                 <User className="w-4 h-4" /> <span className="capitalize">{currentUser.name}</span>
@@ -322,8 +341,8 @@ export default function Home() {
             </div>
 
             {loginError && (
-              <div className="bg-red-900/30 border border-red-500/50 text-red-400 text-sm p-3 rounded-lg mb-6 text-center">
-                {loginError}
+              <div className="bg-red-900/30 border border-red-500/50 text-red-400 text-sm p-3 rounded-lg mb-6 text-center flex items-center justify-center gap-2">
+                <Ban className="w-4 h-4" /> {loginError}
               </div>
             )}
 
@@ -401,7 +420,7 @@ export default function Home() {
 
         {/* --- SECRET ADMIN DASHBOARD --- */}
         {view === "admin" && (
-          <div className="max-w-5xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-10 shadow-2xl mt-10">
+          <div className="max-w-6xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-10 shadow-2xl mt-10">
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-3xl font-bold text-white flex items-center gap-3">
                 <Database className="w-8 h-8 text-blue-500" /> Admin Tracking Dashboard
@@ -420,21 +439,34 @@ export default function Home() {
                     <th className="p-4 font-bold text-slate-400">Designation</th>
                     <th className="p-4 font-bold text-slate-400">Exams Taken</th>
                     <th className="p-4 font-bold text-slate-400">Best Score</th>
+                    <th className="p-4 font-bold text-slate-400">Action</th>
                   </tr>
                 </thead>
                 <tbody>
                   {Object.values(allUsers).length === 0 ? (
-                    <tr><td colSpan={5} className="p-8 text-center text-slate-500">No users have registered yet.</td></tr>
+                    <tr><td colSpan={6} className="p-8 text-center text-slate-500">No users have registered yet.</td></tr>
                   ) : (
                     Object.values(allUsers).map((u, i) => {
                       const bestScore = u.history.length > 0 ? Math.max(...u.history.map(h => h.score)) : 0;
                       return (
-                        <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
-                          <td className="p-4 font-bold text-blue-400 capitalize">{u.name}</td>
+                        <tr key={i} className={`border-b border-slate-800/50 transition-colors ${u.isBlocked ? 'bg-red-950/20' : 'hover:bg-slate-800/30'}`}>
+                          <td className="p-4 font-bold text-blue-400 capitalize flex items-center gap-2">
+                            {u.name} {u.isBlocked && <Ban className="w-3 h-3 text-red-500" />}
+                          </td>
                           <td className="p-4">{u.country || "N/A"}</td>
                           <td className="p-4">{u.designation || "N/A"}</td>
                           <td className="p-4">{u.history.length}</td>
                           <td className="p-4 text-emerald-400 font-bold">{bestScore}</td>
+                          <td className="p-4">
+                            {u.name !== "admin" && (
+                              <button 
+                                onClick={() => toggleBlockUser(u.name)}
+                                className={`px-3 py-1.5 rounded text-xs font-bold transition-colors ${u.isBlocked ? 'bg-emerald-900/50 text-emerald-400 hover:bg-emerald-800/80' : 'bg-red-900/50 text-red-400 hover:bg-red-800/80'}`}
+                              >
+                                {u.isBlocked ? "Unblock User" : "Block User"}
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       );
                     })
