@@ -274,4 +274,4 @@ export default function ArchitectureVisualizer({
       )}
     </div>
   );
-}
+}//components\ArchitectureVisualizer.tsx

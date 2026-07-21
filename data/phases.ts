@@ -584,4 +584,4 @@ export const phases: Phase[] = [
       { id: "tf-13-1", group: "1. Terraform Destroy", task: "Run terraform destroy with auto-approve", expected: "terraform destroy -auto-approve", hint: "Destroy all Terraform resources.", explanation: "Terraform automatically calculates the dependency graph and destroys resources in the correct 'inside-out' order, saving you from writing manual teardown scripts.", breakdown: "terraform destroy -auto-approve -> Tell Terraform to completely bulldoze the entire restaurant and everything inside it automatically." }
     ]
   }
-];
+];//data\phases.ts

@@ -3,14 +3,24 @@ import { useState, useEffect } from "react";
 import { phases, Command } from "../data/phases";
 import CodeTester from "../components/CodeTester";
 import ArchitectureVisualizer from "../components/ArchitectureVisualizer";
-import { Terminal, Code, ArrowRight, ArrowLeft, Database, LayoutDashboard, PlayCircle, CheckCircle2, ChefHat, User, Clock, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { Terminal, Code, ArrowRight, ArrowLeft, Database, LayoutDashboard, PlayCircle, CheckCircle2, ChefHat, User, Clock, BookOpen, ChevronDown, ChevronUp, Lock, MapPin, Briefcase, MessageCircle, Shield } from "lucide-react";
 
 type ExamRun = { date: string; score: number; maxScore: number; mode: string; timeTaken: number };
-type UserProfile = { name: string; history: ExamRun[] };
+type UserProfile = { name: string; password?: string; country?: string; designation?: string; history: ExamRun[] };
+
+// --- YOUR CONTACT INFO ---
+const WHATSAPP_NUMBER = "923401071629"; // <-- CHANGE THIS TO YOUR ACTUAL WHATSAPP NUMBER (Include country code, no + or spaces)
 
 export default function Home() {
-  const [view, setView] = useState<"login" | "intro" | "simulator" | "dashboard">("login");
+  const [view, setView] = useState<"login" | "intro" | "simulator" | "dashboard" | "admin">("login");
+  
+  // Login Form States
   const [usernameInput, setUsernameInput] = useState("");
+  const [passwordInput, setPasswordInput] = useState("");
+  const [countryInput, setCountryInput] = useState("");
+  const [designationInput, setDesignationInput] = useState("");
+  const [loginError, setLoginError] = useState("");
+
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
   const [allUsers, setAllUsers] = useState<{ [key: string]: UserProfile }>({});
   const [currentPhaseIdx, setCurrentPhaseIdx] = useState(0);
@@ -28,15 +38,34 @@ export default function Home() {
   const [examTime, setExamTime] = useState(0);
   const [isExamRunning, setIsExamRunning] = useState(false);
 
-  // Get active state based on current mode
   const activeInputs = mode === "cli" ? cliInputs : tfInputs;
   const activeScores = mode === "cli" ? cliScores : tfScores;
   const activeAliasMap = mode === "cli" ? cliAliasMap : tfAliasMap;
 
+  // 1. Fetch users securely from our backend API on load
   useEffect(() => {
-    const saved = localStorage.getItem("aws_users");
-    if (saved) setAllUsers(JSON.parse(saved));
+    fetch('/api/users')
+      .then(res => res.json())
+      .then(data => {
+        if (data.record && !data.record.placeholder) {
+          setAllUsers(data.record);
+        }
+      })
+      .catch(err => console.error("Failed to load users", err));
   }, []);
+
+  // 2. Save users securely to our backend API
+  const saveUsersToDB = async (updatedUsers: any) => {
+    try {
+      await fetch('/api/users', {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updatedUsers)
+      });
+    } catch (err) {
+      console.error("Failed to save users", err);
+    }
+  };
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -46,24 +75,53 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [isExamRunning]);
 
-  // Reset story expansion when phase changes
   useEffect(() => {
     setIsStoryExpanded(false);
   }, [currentPhaseIdx]);
 
   const handleLogin = () => {
+    setLoginError("");
     const name = usernameInput.trim().toLowerCase();
-    if (!name) return;
+    const pwd = passwordInput.trim();
+
+    if (!name || !pwd) {
+      setLoginError("Username and Password are required.");
+      return;
+    }
+
+    // Protect the admin account from wrong passwords
+    if (name === "admin" && pwd !== "admin123") {
+      setLoginError("Incorrect admin password.");
+      return;
+    }
 
     if (allUsers[name]) {
+      // Returning User
+      if (allUsers[name].password !== pwd) {
+        setLoginError("Incorrect password for this username.");
+        return;
+      }
       setCurrentUser(allUsers[name]);
     } else {
-      const newUser = { name, history: [] };
+      // New User
+      if (name !== "admin" && (!countryInput.trim() || !designationInput.trim())) {
+        setLoginError("New users must provide Country and Designation.");
+        return;
+      }
+      const newUser = { 
+        name, 
+        password: pwd, 
+        country: name === "admin" ? "Admin" : countryInput.trim(), 
+        designation: name === "admin" ? "Admin" : designationInput.trim(), 
+        history: [] 
+      };
       const updatedUsers = { ...allUsers, [name]: newUser };
       setAllUsers(updatedUsers);
       setCurrentUser(newUser);
-      localStorage.setItem("aws_users", JSON.stringify(updatedUsers));
+      saveUsersToDB(updatedUsers);
     }
+    
+    // Everyone goes to the intro screen (even the admin, so they can play!)
     setView("intro");
   };
 
@@ -212,7 +270,7 @@ export default function Home() {
 
     setCurrentUser(updatedUser);
     setAllUsers(updatedUsers);
-    localStorage.setItem("aws_users", JSON.stringify(updatedUsers));
+    saveUsersToDB(updatedUsers);
     setView("dashboard");
   };
 
@@ -223,7 +281,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans selection:bg-blue-500/30 relative pb-20">
       <header className="border-b border-slate-800 bg-slate-900/50 sticky top-0 z-10 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
           <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent flex items-center gap-2">
@@ -232,8 +290,16 @@ export default function Home() {
           {currentUser && view !== "login" && (
             <div className="flex gap-4 items-center">
               <div className="text-sm text-slate-400 flex items-center gap-2 bg-slate-800 px-3 py-1 rounded-full">
-                <User className="w-4 h-4" /> {currentUser.name}
+                <User className="w-4 h-4" /> <span className="capitalize">{currentUser.name}</span>
               </div>
+              
+              {/* SECRET ADMIN BUTTON - ONLY SHOWS FOR ADMIN */}
+              {currentUser.name === "admin" && (
+                <button onClick={() => setView("admin")} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-bold transition-all ${view === "admin" ? "bg-red-900/50 text-red-400 border border-red-500/50" : "text-red-400 hover:bg-red-900/30"}`}>
+                  <Shield className="w-4 h-4" /> Admin Panel
+                </button>
+              )}
+
               <button onClick={() => setView("simulator")} className={`flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium transition-all ${view === "simulator" ? "bg-slate-800 text-white" : "text-slate-400 hover:text-white"}`}>
                 <PlayCircle className="w-4 h-4" /> Simulator
               </button>
@@ -248,28 +314,141 @@ export default function Home() {
       <main className="max-w-6xl mx-auto px-6 py-8">
         
         {view === "login" && (
-          <div className="max-w-md mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-10 shadow-2xl text-center mt-20">
-            <User className="w-16 h-16 text-blue-500 mx-auto mb-6" />
-            <h2 className="text-2xl font-bold text-white mb-2">Select Profile</h2>
-            <p className="text-slate-400 mb-6 text-sm">Enter your name to load your workspace or create a new one.</p>
-            <input 
-              type="text" 
-              value={usernameInput}
-              onChange={(e) => setUsernameInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
-              placeholder="e.g. Zubair"
-              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-white mb-4 focus:outline-none focus:border-blue-500 text-center text-lg"
-            />
-            <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all">
-              Enter Workspace
-            </button>
+          <div className="max-w-md mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-10 shadow-2xl mt-10">
+            <div className="text-center mb-8">
+              <User className="w-16 h-16 text-blue-500 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white">Access Workspace</h2>
+              <p className="text-slate-400 text-sm mt-2">Login or register to save your progress.</p>
+            </div>
+
+            {loginError && (
+              <div className="bg-red-900/30 border border-red-500/50 text-red-400 text-sm p-3 rounded-lg mb-6 text-center">
+                {loginError}
+              </div>
+            )}
+
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Username</label>
+                <div className="relative">
+                  <User className="w-5 h-5 text-slate-500 absolute left-3 top-3" />
+                  <input 
+                    type="text" 
+                    value={usernameInput}
+                    onChange={(e) => setUsernameInput(e.target.value)}
+                    placeholder="e.g. john_doe"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Password</label>
+                <div className="relative">
+                  <Lock className="w-5 h-5 text-slate-500 absolute left-3 top-3" />
+                  <input 
+                    type="password" 
+                    value={passwordInput}
+                    onChange={(e) => setPasswordInput(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                    placeholder="••••••••"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-800">
+                <p className="text-xs text-slate-500 mb-4 text-center">New users must fill out the fields below to register.</p>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Country</label>
+                    <div className="relative">
+                      <MapPin className="w-5 h-5 text-slate-500 absolute left-3 top-3" />
+                      <input 
+                        type="text" 
+                        value={countryInput}
+                        onChange={(e) => setCountryInput(e.target.value)}
+                        placeholder="e.g. United States"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1 block">Designation</label>
+                    <div className="relative">
+                      <Briefcase className="w-5 h-5 text-slate-500 absolute left-3 top-3" />
+                      <input 
+                        type="text" 
+                        value={designationInput}
+                        onChange={(e) => setDesignationInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
+                        placeholder="e.g. DevOps Engineer"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-3 text-white focus:outline-none focus:border-blue-500"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <button onClick={handleLogin} className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg transition-all mt-6 shadow-lg shadow-blue-900/20">
+                Login / Register
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* --- SECRET ADMIN DASHBOARD --- */}
+        {view === "admin" && (
+          <div className="max-w-5xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-10 shadow-2xl mt-10">
+            <div className="flex justify-between items-center mb-8">
+              <h2 className="text-3xl font-bold text-white flex items-center gap-3">
+                <Database className="w-8 h-8 text-blue-500" /> Admin Tracking Dashboard
+              </h2>
+              <button onClick={() => setView("intro")} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg transition-all font-bold">
+                Back to Simulator
+              </button>
+            </div>
+            
+            <div className="overflow-x-auto bg-slate-950 rounded-xl border border-slate-800">
+              <table className="w-full text-left text-slate-300">
+                <thead>
+                  <tr className="border-b border-slate-700 bg-slate-800/50">
+                    <th className="p-4 font-bold text-slate-400">Username</th>
+                    <th className="p-4 font-bold text-slate-400">Country</th>
+                    <th className="p-4 font-bold text-slate-400">Designation</th>
+                    <th className="p-4 font-bold text-slate-400">Exams Taken</th>
+                    <th className="p-4 font-bold text-slate-400">Best Score</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.values(allUsers).length === 0 ? (
+                    <tr><td colSpan={5} className="p-8 text-center text-slate-500">No users have registered yet.</td></tr>
+                  ) : (
+                    Object.values(allUsers).map((u, i) => {
+                      const bestScore = u.history.length > 0 ? Math.max(...u.history.map(h => h.score)) : 0;
+                      return (
+                        <tr key={i} className="border-b border-slate-800/50 hover:bg-slate-800/30 transition-colors">
+                          <td className="p-4 font-bold text-blue-400 capitalize">{u.name}</td>
+                          <td className="p-4">{u.country || "N/A"}</td>
+                          <td className="p-4">{u.designation || "N/A"}</td>
+                          <td className="p-4">{u.history.length}</td>
+                          <td className="p-4 text-emerald-400 font-bold">{bestScore}</td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
         {view === "intro" && (
           <div className="max-w-3xl mx-auto bg-slate-900 border border-slate-800 rounded-2xl p-10 shadow-2xl text-center mt-10">
             <ChefHat className="w-20 h-20 text-blue-500 mx-auto mb-6" />
-            <h2 className="text-4xl font-bold text-white mb-6">Welcome, {currentUser?.name}!</h2>
+            <h2 className="text-4xl font-bold text-white mb-6 capitalize">Welcome, {currentUser?.name}!</h2>
             <p className="text-lg text-slate-400 mb-8 leading-relaxed text-left">
               Learning Cloud Architecture can be dry and confusing. To make it stick, we use the <b>Enterprise Restaurant Analogy</b>. 
               <br/><br/>
@@ -286,7 +465,7 @@ export default function Home() {
 
         {view === "dashboard" && currentUser && (
           <div className="space-y-6">
-            <h2 className="text-3xl font-bold text-white">{currentUser.name}'s Exam History</h2>
+            <h2 className="text-3xl font-bold text-white capitalize">{currentUser.name}'s Exam History</h2>
             {currentUser.history.length === 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center text-slate-400">
                 No exams completed yet. Go to the Simulator to start your first run!
@@ -324,7 +503,6 @@ export default function Home() {
                   <div className="h-full bg-blue-500 transition-all duration-500" style={{ width: `${progressPercentage}%` }} />
                 </div>
                 
-                {/* Expandable Story Panel */}
                 <div className="bg-slate-950/50 border border-slate-800 rounded-xl overflow-hidden">
                   <button 
                     onClick={() => setIsStoryExpanded(!isStoryExpanded)}
@@ -436,6 +614,19 @@ export default function Home() {
           </div>
         )}
       </main>
+
+      {/* --- FLOATING WHATSAPP BUTTON --- */}
+      <a 
+        href={`https://wa.me/${WHATSAPP_NUMBER}`} 
+        target="_blank" 
+        rel="noopener noreferrer"
+        className="fixed bottom-6 right-6 bg-green-500 hover:bg-green-400 text-white p-4 rounded-full shadow-lg shadow-green-900/50 transition-transform hover:scale-110 z-50 flex items-center justify-center group"
+      >
+        <MessageCircle className="w-6 h-6" />
+        <span className="absolute right-16 bg-slate-800 text-white text-xs px-3 py-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
+          Contact me for queries!
+        </span>
+      </a>
     </div>
   );
 }
